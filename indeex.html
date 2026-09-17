@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Jogo da Memória 1v1</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; touch-action: manipulation; }
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; background: #1e272c; color: white; overflow: hidden; }
+        
+        #lobby-screen { text-align: center; padding: 20px; background: rgba(0,0,0,0.6); border-radius: 15px; width: 90%; max-width: 400px; }
+        h1 { font-size: 1.6rem; margin-bottom: 15px; color: #f1c40f; text-shadow: 2px 2px 0 #c0392b; }
+        button { background: #27ae60; color: white; border: none; padding: 12px 25px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; margin: 8px; font-weight: bold; width: 100%; max-width: 250px; box-shadow: 0 4px 0 #1e8449; }
+        button:active { transform: translateY(2px); box-shadow: 0 2px 0 #1e8449; }
+        
+        #btn-start-game { background: #e67e22; box-shadow: 0 4px 0 #d35400; display: none; margin-top: 15px; }
+
+        input { padding: 12px; font-size: 1.2rem; border-radius: 10px; border: 2px solid #7f8c8d; background: #ecf0f1; width: 100%; max-width: 250px; text-align: center; margin-bottom: 10px; color: #333; font-weight: bold;}
+        .input-codigo { letter-spacing: 2px; font-size: 1.5rem !important; }
+        
+        #waiting-msg { display: none; font-size: 1.1rem; color: #bdc3c7; }
+        
+        /* TELA DO JOGO */
+        #game-screen { display: none; flex-direction: column; width: 100%; height: 100%; justify-content: space-between; padding: 10px; background: #2c3e50; position: relative; }
+        
+        /* Cabeçalho de Status dos 2 Jogadores */
+        #header-jogadores { display: flex; justify-content: space-around; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 10px; font-size: 0.95rem; text-align: center; }
+        .jogador-status { padding: 8px 15px; border-radius: 8px; background: rgba(255,255,255,0.1); width: 45%; }
+        .jogador-status.ativo { background: #f1c40f; color: #000; font-weight: bold; transform: scale(1.05); transition: 0.2s; }
+
+        /* Banner da Vez */
+        #banner-vez { background: rgba(0,0,0,0.6); color: #f1c40f; font-size: 1.1rem; font-weight: bold; text-align: center; padding: 8px; border-radius: 8px; border: 2px solid #f1c40f; }
+
+        /* Tabuleiro do Jogo da Memória (3x4 = 12 cartas) */
+        #tabuleiro-container { flex: 1; display: flex; justify-content: center; align-items: center; margin: 10px 0; }
+        #grid-memoria { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; max-width: 320px; aspect-ratio: 3/4; }
+        
+        .carta-memoria { background: #2980b9; border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; cursor: pointer; user-select: none; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 2px solid #3498db; transition: transform 0.1s; }
+        .carta-memoria:active { transform: scale(0.95); }
+        .carta-memoria.revelada { background: #fff; border-color: #f1c40f; }
+        .carta-memoria.encontrada { background: #27ae60; opacity: 0.4; cursor: default; }
+
+        #result-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 20; padding: 20px; text-align: center; }
+        #result-text { font-size: 2rem; margin-bottom: 20px; color: #f1c40f; }
+    </style>
+</head>
+<body>
+
+    <div id="lobby-screen">
+        <h1>Jogo da Memória 1v1 🧠</h1>
+        <div id="menu-principal">
+            <input type="text" id="nome-input" placeholder="Seu Nome" maxlength="10">
+            <br>
+            <button onclick="criarSala()">Criar Sala (Host)</button>
+            <p style="margin: 8px 0; color: #95a5a6;">ou</p>
+            <input type="number" id="codigo-input" class="input-codigo" placeholder="Código (4 dígitos)" maxlength="4">
+            <br>
+            <button onclick="entrarSala()">Entrar na Sala</button>
+        </div>
+        <div id="waiting-msg">
+            Status: <span id="status-conexao" style="color: #f39c12; font-weight: bold;">Aguardando o oponente...</span><br>
+            <span id="meu-codigo" style="font-size: 2.2rem; color: #2ecc71; font-weight: bold; display:inline-block; margin-top:10px; letter-spacing: 3px;"></span>
+            <p style="font-size: 0.9rem; margin-top: 10px; color: #f39c12;">Passe este código para o outro jogador!</p>
+            
+            <button id="btn-start-game" onclick="iniciarPartidaHost()">Iniciar Jogo 🚀</button>
+        </div>
+    </div>
+
+    <!-- TELA DO JOGO -->
+    <div id="game-screen">
+        <div id="header-jogadores">
+            <div id="status-p1" class="jogador-status"><span id="lbl-p1">P1</span><br><span id="pts-p1">0</span> pares</div>
+            <div id="status-p2" class="jogador-status"><span id="lbl-p2">P2</span><br><span id="pts-p2">0</span> pares</div>
+        </div>
+
+        <div id="banner-vez">Aguardando início...</div>
+        
+        <div id="tabuleiro-container">
+            <div id="grid-memoria"></div>
+        </div>
+
+        <div id="result-overlay">
+            <div id="result-text">Fim de Jogo!</div>
+            <button onclick="location.reload()">Jogar Novamente</button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    
+    <script>
+        let peer;
+        let conn; // Apenas 1 conexão para 2 jogadores
+        
+        let meuNome = "";
+        let meuIdNoJogo = 'p1';
+        let ehHost = false;
+        
+        let pontuacoes = { p1: 0, p2: 0 };
+        let jogadoresNomes = { p1: 'P1', p2: 'P2' };
+        
+        let turnoAtual = 'p1';
+        let cartasTabuleiro = []; // 12 itens
+        let cartasReveladasNaRodada = [];
+        let jogoAtivo = false;
+
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const menuPrincipal = document.getElementById('menu-principal');
+        const waitingMsg = document.getElementById('waiting-msg');
+        const nomeInput = document.getElementById('nome-input');
+        const meuCodigoEl = document.getElementById('meu-codigo');
+        const statusConexao = document.getElementById('status-conexao');
+        const codigoInput = document.getElementById('codigo-input');
+        const btnStartGame = document.getElementById('btn-start-game');
+        const gameScreen = document.getElementById('game-screen');
+        const bannerVez = document.getElementById('banner-vez');
+        const gridMemoria = document.getElementById('grid-memoria');
+        const resultOverlay = document.getElementById('result-overlay');
+        const resultText = document.getElementById('result-text');
+
+        // 6 pares = 12 cartas (Ovos, Salsichas, Linguiças e afins)
+        const itensBase = ['🥚', '🥚', '🌭', '🌭', '🥓', '🥓', '🍳', '🍳', '🧀', '🧀', '🍞', '🍞'];
+
+        function criarSala() {
+            validarNome();
+            if(!meuNome) return;
+            ehHost = true;
+            meuIdNoJogo = 'p1';
+            jogadoresNomes.p1 = meuNome;
+
+            const codigoCurto = "m2-" + Math.floor(1000 + Math.random() * 9000);
+            peer = new Peer(codigoCurto);
+
+            peer.on('open', (id) => {
+                meuCodigoEl.innerText = id.replace("m2-", "");
+                menuPrincipal.style.display = 'none';
+                waitingMsg.style.display = 'block';
+            });
+
+            peer.on('connection', (connection) => {
+                conn = connection;
+                statusConexao.style.color = "#2ecc71";
+                statusConexao.innerText = "Oponente conectado! Pronto.";
+                btnStartGame.style.display = "inline-block";
+                
+                conn.on('open', () => {
+                    conn.send({ tipo: 'atribuir_papel', papel: 'p2', nomes: jogadoresNomes });
+                });
+
+                conn.on('data', (data) => {
+                    if (data.tipo === 'registrar_nome') {
+                        jogadoresNomes.p2 = data.nome;
+                        transmitirParaOponente({ tipo: 'sincronizar_tudo', nomes: jogadoresNomes, turno: turnoAtual, placares: pontuacoes, tabuleiro: cartasTabuleiro });
+                        atualizarInterfaceGeral();
+                    } else if (data.tipo === 'virar_carta') {
+                        processarViradaCarta(data.indice, data.jogador);
+                    }
+                });
+            });
+            peer.on('error', () => { criarSala(); });
+        }
+
+        function entrarSala() {
+            validarNome();
+            if(!meuNome) return;
+            const digitado = codigoInput.value.trim();
+            if(!digitado) { alert('Digite o código!'); return; }
+            
+            ehHost = false;
+            peer = new Peer();
+
+            peer.on('open', () => {
+                conn = peer.connect("m2-" + digitado);
+                conn.on('open', () => {
+                    menuPrincipal.style.display = 'none';
+                    waitingMsg.style.display = 'block';
+                    statusConexao.innerText = "Conectado! Aguardando Host iniciar...";
+                });
+                conn.on('data', (data) => {
+                    if (data.tipo === 'atribuir_papel') {
+                        meuIdNoJogo = data.papel;
+                        jogadoresNomes = data.nomes;
+                        jogadoresNomes.p2 = meuNome;
+                        conn.send({ tipo: 'registrar_nome', nome: meuNome });
+                    } else if (data.tipo === 'iniciar_jogo') {
+                        cartasTabuleiro = data.tabuleiro;
+                        turnoAtual = data.turno;
+                        jogadoresNomes = data.nomes;
+                        iniciarJogoVisual();
+                    } else if (data.tipo === 'sincronizar_tudo') {
+                        jogadoresNomes = data.nomes;
+                        turnoAtual = data.turno;
+                        pontuacoes = data.placares;
+                        cartasTabuleiro = data.tabuleiro;
+                        atualizarInterfaceGeral();
+                    } else if (data.tipo === 'atualizar_tabuleiro') {
+                        cartasTabuleiro = data.tabuleiro;
+                        pontuacoes = data.placares;
+                        turnoAtual = data.turno;
+                        cartasReveladasNaRodada = data.reveladasRodada || [];
+                        atualizarInterfaceGeral();
+                    } else if (data.tipo === 'fim_jogo') {
+                        mostrarFimDeJogo(data.textoVencedor);
+                    }
+                });
+            });
+        }
+
+        function validarNome() {
+            let n = nomeInput.value.trim();
+            meuNome = n ? n : '';
+            if(!meuNome) alert('Digite seu nome!');
+        }
+
+        function iniciarPartidaHost() {
+            let embaralhadas = [...itensBase].sort(() => Math.random() - 0.5);
+            cartasTabuleiro = embaralhadas.map(emoji => ({ emoji: emoji, revelada: false, encontrada: false }));
+            turnoAtual = 'p1';
+
+            transmitirParaOponente({ tipo: 'iniciar_jogo', tabuleiro: cartasTabuleiro, turno: turnoAtual, nomes: jogadoresNomes });
+            iniciarJogoVisual();
+        }
+
+        function iniciarJogoVisual() {
+            lobbyScreen.style.display = 'none';
+            gameScreen.style.display = 'flex';
+            jogoAtivo = true;
+            atualizarInterfaceGeral();
+        }
+
+        function atualizarInterfaceGeral() {
+            document.getElementById('lbl-p1').innerText = jogadoresNomes.p1;
+            document.getElementById('lbl-p2').innerText = jogadoresNomes.p2;
+            
+            document.getElementById('pts-p1').innerText = pontuacoes.p1;
+            document.getElementById('pts-p2').innerText = pontuacoes.p2;
+
+            document.getElementById('status-p1').className = 'jogador-status' + (turnoAtual === 'p1' ? ' ativo' : '');
+            document.getElementById('status-p2').className = 'jogador-status' + (turnoAtual === 'p2' ? ' ativo' : '');
+
+            if (turnoAtual === meuIdNoJogo) {
+                bannerVez.innerText = "👉 É A SUA VEZ! Escolha 2 cartas.";
+                bannerVez.style.color = "#2ecc71";
+            } else {
+                let nomeTurno = jogadoresNomes[turnoAtual];
+                bannerVez.innerText = `⏳ Vez de: ${nomeTurno}`;
+                bannerVez.style.color = "#f1c40f";
+            }
+
+            renderizarTabuleiro();
+        }
+
+        function renderizarTabuleiro() {
+            gridMemoria.innerHTML = '';
+            cartasTabuleiro.forEach((carta, index) => {
+                const el = document.createElement('div');
+                el.className = 'carta-memoria';
+                if (carta.encontrada) {
+                    el.classList.add('encontrada');
+                    el.innerText = carta.emoji;
+                } else if (carta.revelada || cartasReveladasNaRodada.includes(index)) {
+                    el.classList.add('revelada');
+                    el.innerText = carta.emoji;
+                } else {
+                    el.innerText = '❓';
+                }
+
+                el.onclick = () => clicarCarta(index);
+                gridMemoria.appendChild(el);
+            });
+        }
+
+        function clicarCarta(index) {
+            if (!jogoAtivo) return;
+            if (turnoAtual !== meuIdNoJogo) {
+                alert('Aguarde! Não é o seu turno.');
+                return;
+            }
+            if (cartasTabuleiro[index].encontrada || cartasTabuleiro[index].revelada) return;
+
+            if (ehHost) {
+                processarViradaCarta(index, meuIdNoJogo);
+            } else {
+                conn.send({ tipo: 'virar_carta', indice: index, jogador: meuIdNoJogo });
+            }
+        }
+
+        let selecoesAtuais = [];
+
+        function processarViradaCarta(index, jogador) {
+            if (cartasTabuleiro[index].encontrada || cartasTabuleiro[index].revelada) return;
+
+            cartasTabuleiro[index].revelada = true;
+            selecoesAtuais.push({ index: index, emoji: cartasTabuleiro[index].emoji });
+            cartasReveladasNaRodada = selecoesAtuais.map(s => s.index);
+
+            if (selecoesAtuais.length === 2) {
+                let c1 = selecoesAtuais[0];
+                let c2 = selecoesAtuais[1];
+
+                if (c1.emoji === c2.emoji) {
+                    cartasTabuleiro[c1.index].encontrada = true;
+                    cartasTabuleiro[c2.index].encontrada = true;
+                    cartasTabuleiro[c1.index].revelada = false;
+                    cartasTabuleiro[c2.index].revelada = false;
+                    pontuacoes[jogador]++;
+                    selecoesAtuais = [];
+                    cartasReveladasNaRodada = [];
+
+                    if (cartasTabuleiro.every(c => c.encontrada)) {
+                        verificarFimDeJogo();
+                        return;
+                    }
+                } else {
+                    setTimeout(() => {
+                        cartasTabuleiro[c1.index].revelada = false;
+                        cartasTabuleiro[c2.index].revelada = false;
+                        selecoesAtuais = [];
+                        cartasReveladasNaRodada = [];
+
+                        turnoAtual = (turnoAtual === 'p1') ? 'p2' : 'p1';
+                        sincronizarHost();
+                    }, 1200);
+                }
+            }
+
+            sincronizarHost();
+        }
+
+        function sincronizarHost() {
+            if (ehHost && conn && conn.open) {
+                conn.send({ 
+                    tipo: 'atualizar_tabuleiro', 
+                    tabuleiro: cartasTabuleiro, 
+                    placares: pontuacoes, 
+                    turno: turnoAtual,
+                    reveladasRodada: cartasReveladasNaRodada 
+                });
+            }
+            atualizarInterfaceGeral();
+        }
+
+        function verificarFimDeJogo() {
+            let textoVencedor = "";
+            if (pontuacoes.p1 > pontuacoes.p2) {
+                textoVencedor = `${jogadoresNomes.p1} Venceu o Jogo! 🧠🏆`;
+            } else if (pontuacoes.p2 > pontuacoes.p1) {
+                textoVencedor = `${jogadoresNomes.p2} Venceu o Jogo! 🧠🏆`;
+            } else {
+                textoVencedor = "Empate! 🤝";
+            }
+
+            if (ehHost && conn && conn.open) {
+                conn.send({ tipo: 'fim_jogo', textoVencedor: textoVencedor });
+            }
+            mostrarFimDeJogo(textoVencedor);
+        }
+
+        function mostrarFimDeJogo(texto) {
+            jogoAtivo = false;
+            resultOverlay.style.display = 'flex';
+            resultText.innerText = texto;
+        }
+
+        function transmitirParaOponente(dados) {
+            if (conn && conn.open) conn.send(dados);
+        }
+    </script>
+</body>
+</html>
